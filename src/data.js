@@ -24,7 +24,7 @@ export const groupOf = i => (i.k == 'q' ? i.e : i.g);
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 // k: 'p' patología | 'q' procedimiento · g: capítulo (p) · e: especialidad (q) · s: tema o subespecialidad
 // ra: fecha de la última modificación (se actualiza sola)
-export const mk = (k, t, g = '', s = '', e = '') => ({ id: uid(), k, t, g, s, e, st: 0, nx: '', ra: '', f: {}, c: [], pr: [], l: [] });
+export const mk = (k, t, g = '', s = '', e = '') => ({ id: uid(), k, t, g, s, e, st: 0, nx: '', ra: '', f: {}, c: [], pr: [], l: [], img: [] });
 
 export const hue = g => { let h = 0; for (const c of g || 'x') h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -63,7 +63,7 @@ export const def = o => Object.assign(
 export function migrateV1(j) {
   (j.items || []).forEach(i => {
     if (i.k == 'q' && i.e == null) { i.e = i.g; i.g = ''; }
-    i.s ??= ''; i.nx ??= ''; i.ra ??= ''; i.l ??= []; i.c ??= []; i.pr ??= []; i.f ??= {};
+    i.s ??= ''; i.nx ??= ''; i.ra ??= ''; i.l ??= []; i.c ??= []; i.pr ??= []; i.f ??= {}; i.img ??= [];
     // Se quitó el apartado “Fuente y fecha de revisión”: su texto pasa al final de otro apartado para no perderlo.
     const src = (i.f.src || '').trim();
     if (src) { const k = i.k == 'q' ? 'seg' : 'per'; i.f[k] = ((i.f[k] || '').trim() + '\n\nFuente: ' + src).trim(); }

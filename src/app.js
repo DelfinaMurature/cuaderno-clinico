@@ -5,9 +5,9 @@ import * as store from './store.js';
 import * as backup from './backup.js';
 import * as sync from './sync.js';
 import { ensureTx, roman } from './taxonomy.js';
-import { initEvo, evo, EVR, evoInput, evoChange } from './evo/ui.js';
+import { initEvo, evo, EVR, evoInput, evoChange, richEvo } from './evo/ui.js';
 import { initEvoEditor, openEditor, bindEvoEditor } from './evo/editor.js';
-import { initPartes, viewPartes, viewParte, PR, partesInput, partesChange, bindPEditor, findP } from './partes/ui.js';
+import { initPartes, viewPartes, viewParte, PR, partesInput, partesChange, bindPEditor, findP, richPartes } from './partes/ui.js';
 import { initStats, viewStats, SR, bindTips } from './stats.js';
 import { initFormulas, fmv, fcalc, FMR, formulaSheetClick } from './formulas.js';
 import { initCalc, viewCalc, CR, calcInput } from './calc/ui.js';
@@ -134,7 +134,7 @@ function drawNav(sec) {
 }
 const SHORT = { off: 'Local', out: 'Entrar', ok: 'Sync', busy: 'Sync…', err: 'Error', offline: 'Offline' };
 const STL = { off: 'Solo local', out: 'Iniciar sesión', ok: 'Sincronizado', busy: 'Sincronizando…', err: 'Error de sync', offline: 'Sin conexión' };
-const syncBtn = () => { const s = sync.getStatus().status; return `<button class="ib" data-sheet="acct" aria-label="Cuenta: ${STL[s]}"><i class="dot ${({ ok: 'ok', busy: 'busy', err: 'err' })[s] || ''}"></i><span style="font-size:13px">${SHORT[s]}</span></button>`; };
+const syncBtn = () => { const s = sync.getStatus().status; return `<button class="ib" data-sheet="acct" aria-label="Cuenta: ${STL[s]}"><i class="dot ${({ ok: 'ok', busy: 'busy', err: 'err' })[s] || ''}"></i><span style="font-size:13px">${SHORT[s]}</span></button>${sync.enabled ? '' : '<span id="svind" class="svind"></span>'}`; };
 
 function drawTop(r) {
   let title = '', left = '', right = syncBtn();
@@ -231,6 +231,47 @@ function viewFicha(r) {
   const metaLine = `<p class="meta">${it.ra ? 'Última revisión: ' + fmtD(it.ra) : 'Sin modificaciones todavía'}${it.nx ? ' · Próximo repaso: ' + fmtD(it.nx) : ''}</p>`;
   return `<div class="${r.edit ? 'ed' : ''}" id="fwrap">${r.edit ? fichaEdit(it, seg) : fichaRead(it, G, seg, metaLine)}</div>`;
 }
+/* ---------- Imágenes de la ficha (solo local, sin Supabase Storage) ---------- */
+const IMG_MAX = 12, IMG_DIM = 1600, IMG_Q = 0.82;
+function compressImg(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = reject;
+    fr.onload = () => {
+      const im = new Image();
+      im.onerror = reject;
+      im.onload = () => {
+        let w = im.width, h = im.height;
+        if (w > IMG_DIM || h > IMG_DIM) { const sc = IMG_DIM / Math.max(w, h); w = Math.round(w * sc); h = Math.round(h * sc); }
+        const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(im, 0, 0, w, h);
+        resolve(cv.toDataURL('image/jpeg', IMG_Q));
+      };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+async function imgFilesChosen(input) {
+  const it = cur(); if (!it) return;
+  it.img ??= [];
+  const files = Array.from(input.files || []).slice(0, Math.max(0, IMG_MAX - it.img.length));
+  for (const f of files) { try { const d = await compressImg(f); it.img.push({ d, c: '' }); } catch { /* imagen inválida, se ignora */ } }
+  input.value = ''; touch(it); save(); render();
+}
+function imgGallery(it, edit) {
+  const imgs = it.img || [];
+  if (!edit && !imgs.length) return '';
+  const thumbs = imgs.map((im, i) => `<figure class="imgt">
+    <a href="${im.d}" target="_blank" rel="noopener"><img src="${im.d}" alt="${esc(im.c || '')}" loading="lazy"></a>
+    ${edit ? `<div class="imgctl"><button class="x" data-r="imgmv" data-i="${i}" data-v="-1" aria-label="Mover antes">↑</button><button class="x" data-r="imgmv" data-i="${i}" data-v="1" aria-label="Mover después">↓</button><button class="x" data-r="imgdel" data-i="${i}" aria-label="Quitar">×</button></div>
+    <input class="imgcap" data-imgcap="${i}" value="${esc(im.c || '')}" placeholder="Título o descripción" autocomplete="off">` : (im.c ? `<figcaption>${esc(im.c)}</figcaption>` : '')}
+  </figure>`).join('');
+  return `<section class="imgsec"><div class="sech"><h4>Imágenes</h4></div>
+  <div class="imgg">${thumbs}</div>
+  ${edit ? `<div class="acts"><button class="add" data-r="imgadd" ${imgs.length >= IMG_MAX ? 'disabled' : ''}>${ic('img', 'sm')} Agregar imagen${imgs.length ? '' : 'es'}</button><span class="meta">${imgs.length}/${IMG_MAX}</span></div><input type="file" id="imgfile" accept="image/*" multiple hidden>` : ''}
+  </section>`;
+}
 function fichaRead(it, G, seg, metaLine) {
   const F = fieldsOf(it), has = k => (k == '_c' ? it.c.length : k == '_p' ? it.pr.length : plain(it.f[k]).trim());
   const filled = F.filter(([k]) => has(k));
@@ -244,9 +285,10 @@ function fichaRead(it, G, seg, metaLine) {
   const rel = it.l.map(find).filter(Boolean);
   return `<div class="fh"><button class="tag" style="--h:${hue(G)};border:0" data-nav="${fichasPath(it.k, G || noneOf(it.k), it.s || 'General')}">${esc([G || noneOf(it.k), it.s].filter(Boolean).join(' · '))}</button>
     <h2 class="ti-r">${esc(it.t || 'Sin título')}</h2>${metaLine}${seg}
-    <div class="acts"><button class="chip" data-r="rep">${ic('clock', 'sm')} Repasada hoy</button></div></div>
+    <div class="acts"><button class="chip" data-r="rep">${ic('clock', 'sm')} Repasada hoy</button><button class="chip" data-r="printf">${ic('print', 'sm')} Exportar a PDF</button></div></div>
   ${filled.length > 1 ? `<div class="toc">${filled.map(([k, l]) => `<button data-toc="s-${k}">${l}</button>`).join('')}</div>` : ''}
   ${filled.length ? `<div class="rd">${sec}</div>` : `<div class="empty">${ic('edit')}<p>Esta ficha está vacía.</p><button class="bt" data-r="mode" data-v="edit">Completar ficha</button></div>`}
+  ${imgGallery(it, false)}
   ${rel.length ? `<div class="eyebrow">Fichas relacionadas</div><div>${rel.map(x => `<button class="chip" data-open="${x.id}">${esc(x.t)}</button>`).join('')}</div>` : ''}`;
 }
 const boxAdder = it => {
@@ -274,6 +316,7 @@ function fichaEdit(it, seg) {
   <label class="f">${L2}<select data-sel="s"><option value="">General</option>${ss.map(s => `<option ${s == it.s ? 'selected' : ''} value="${esc(s)}">${esc(temaLabel(it.k, gv, s))}</option>`).join('')}</select></label></div>
   <p class="meta">¿Falta un ${L1.toLowerCase()} o ${L2.toLowerCase()}? <button class="ib txt" style="min-height:32px;padding:0 4px" data-r="cls" data-k="${it.k}">Editar clasificación</button></p>
   ${seg}<div class="tl"><label class="f">Próximo repaso<input type="date" data-k="nx" value="${it.nx || ''}"></label><button class="chip" data-r="rep">${ic('clock', 'sm')} Repasada hoy</button></div>${sec}
+  ${imgGallery(it, true)}
   <section><h4>Fichas relacionadas</h4>${it.l.map(find).filter(Boolean).map(x => `<button class="chip" data-r="unlink" data-i="${x.id}">${esc(x.t)} ×</button>`).join('')}
   <label class="f"><select data-add><option value="">+ Vincular ficha…</option>${oth.map(x => `<option value="${x.id}">${x.k == 'p' ? 'Patología' : 'Procedimiento'} · ${esc(x.t || 'Sin título')}</option>`).join('')}</select></label></section>
   <div class="acts" style="margin-top:28px"><button class="bt dan" data-r="del">${ic('trash', 'sm')} Eliminar ficha</button></div>`;
@@ -432,19 +475,28 @@ const R = {
     touch(it); save(); render();
   },
   rbadd(b) { const it = cur(); it.fx ??= {}; it.fx.hide = (it.fx.hide || []).filter(k => k != b.dataset.k); touch(it); save(); render(); },
+  printf() { window.print(); },
   rbnew() {
     const it = cur(), n = ($('#rbn').value || '').trim(); if (!n) return toast('Escribí el título del recuadro');
     it.fx ??= {}; (it.fx.x ??= []).push({ k: 'x' + uid().slice(-6), l: n }); touch(it); save(); render();
   },
+  imgadd() { $('#imgfile')?.click(); },
+  imgdel(b) { const it = cur(); if (!it) return; it.img.splice(+b.dataset.i, 1); touch(it); save(); render(); },
+  imgmv(b) { const it = cur(); if (!it) return; const i = +b.dataset.i, j = i + +b.dataset.v; if (j < 0 || j >= it.img.length) return; [it.img[i], it.img[j]] = [it.img[j], it.img[i]]; touch(it); save(); render(); },
   ...EVR, ...FMR, ...CR, ...PR, ...SR
 };
 
 /* ---------- texto enriquecido ---------- */
-function onRich(ed) { const it = cur(); if (!it) return; it.f[ed.dataset.rf] = pack(ed.innerHTML); touch(it); save(); }
+function onRich(ed) {
+  const rf = ed.dataset.rf;
+  if (rf == '_evo') return richEvo(ed.innerHTML);
+  if (rf == '_partes') return richPartes(ed.innerHTML);
+  const it = cur(); if (!it) return; it.f[rf] = pack(ed.innerHTML); touch(it); save();
+}
 $('#view').addEventListener('mousedown', e => { if (e.target.closest('.rtb button')) e.preventDefault(); });
 $('#view').addEventListener('pointerdown', e => { if (e.target.closest('.rtb button')) e.preventDefault(); });
 document.addEventListener('selectionchange', () => { const a = document.activeElement; if (a && a.dataset && a.dataset.rf != null) saveSel(a); });
-$('#view').addEventListener('click', e => { const b = e.target.closest('.rtb button[data-rc]'); if (!b) return; const ed = b.closest('section').querySelector('[data-rf]'); if (exec(ed, b.dataset.rc)) onRich(ed); });
+$('#view').addEventListener('click', e => { const b = e.target.closest('.rtb button[data-rc]'); if (!b) return; const ed = b.closest('.rtb').nextElementSibling; if (ed && exec(ed, b.dataset.rc)) onRich(ed); });
 $('#view').addEventListener('paste', e => {
   const ed = e.target.closest && e.target.closest('[data-rf]'); if (!ed) return;
   e.preventDefault(); const h = e.clipboardData.getData('text/html'), t = e.clipboardData.getData('text/plain');
@@ -469,6 +521,7 @@ $('#view').addEventListener('input', e => {
   if (d.q != null) { qs = t.value; $('#fl').innerHTML = fichasList(parse()); $('#fab').hidden = !!qs; return; }
   if (d.fk) return fcalc(d.fk);
   if (d.rf != null) return onRich(t);
+  if (d.imgcap != null) { const it = cur(); if (it && it.img[+d.imgcap]) it.img[+d.imgcap].c = t.value; touch(it); save(); return; }
   if (d.rt != null) { const it = cur(), e = ((it.fx || {}).x || []).find(x => x.k == d.rt); if (e) { e.l = t.value; touch(it); save(); } return; }
   if (t.tagName == 'TEXTAREA' && (d.pst != null || d.pf != null || d.ef != null)) grow(t);
   if (evoInput(e) || partesInput(e) || calcInput(e)) return;
@@ -483,7 +536,8 @@ $('#view').addEventListener('input', e => {
 });
 $('#view').addEventListener('change', e => {
   const t = e.target, d = t.dataset;
-  if (d.rs != null) { const ed = t.closest('section').querySelector('[data-rf]'); if (exec(ed, d.rs, t.value)) { onRich(ed); } t.value = ''; return; }
+  if (t.id == 'imgfile') return imgFilesChosen(t);
+  if (d.rs != null) { const ed = t.closest('.rtb').nextElementSibling; if (ed && exec(ed, d.rs, t.value)) { onRich(ed); } t.value = ''; return; }
   if (d.cfg) { S.cfg[d.cfg] = d.cfg == 'n' ? +t.value : t.value; save(); return; }
   if (evoChange(e) || partesChange(e)) return;
   const it = cur(); if (!it) return;

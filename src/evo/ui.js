@@ -2,6 +2,7 @@
 // Estado de la evolución en curso (S.ev) y evaluaciones guardadas (S.evh): solo en el dispositivo.
 // Plantillas propias (S.evt) y clasificación (S.evx): se sincronizan (no tienen datos de pacientes).
 import { esc } from '../data.js';
+import { toolbar, toEdit, pack, mdToHtml } from '../rich.js';
 import { ic } from '../icons.js';
 import { compose, renderField, normalOf, activeSecs, optLabel, optPhrase, scaleDef, TEMP, PATOL, isSet } from './engine.js';
 import { SCALES, GCS, NIHSS, MUSCLES, REFLEXES, ROT_V, SENS_T, SENS_M, SENS_D, CONC, CONC_MOD, O2, LAB, DEVICES, DEV_EST, DEV_CAR, DEV_SITE, DERM, KEYM, isncsci } from './scales.js';
@@ -108,7 +109,7 @@ function finalPanel(T, n) {
   return `<div class="pan"><h3>Texto de la evolución</h3><p class="meta">Borrador para revisar antes de pasarlo a la historia clínica. Sin datos identificatorios.</p>
   <div class="seg"><button data-r="evopt" data-k="out" data-v="" class="${e.out != 's' ? 'on' : ''}">Texto corrido</button><button data-r="evopt" data-k="out" data-v="s" class="${e.out == 's' ? 'on' : ''}">Por apartados</button></div>
   <div style="margin-top:8px">${tg('det', 'Detalle de escalas')}${tg('lf', 'Marcar laboratorio ↑↓')}${e.base ? tg('nochg', '“Sin otros cambios”') : ''}</div>
-  <textarea id="vout" ${e.txt != null ? 'data-evtxt' : 'readonly'}>${esc(txt || 'Todavía no marcaste nada.')}</textarea>
+  ${e.txt != null ? `${toolbar('_evo')}<div id="vout" class="rte" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Texto de la evolución" data-rf="_evo">${toEdit(txt)}</div>` : `<textarea id="vout" readonly>${esc(txt || 'Todavía no marcaste nada.')}</textarea>`}
   <div class="acts"><button class="bt" data-r="evcopy">${ic('copy', 'sm')} Copiar</button>${e.txt != null ? `<button class="bt sec" data-r="evregen">Volver al texto automático</button>` : `<button class="bt sec" data-r="evtxt">${ic('edit', 'sm')} Editar texto</button>`}<span class="meta" id="vm"></span></div>
   <div class="eyebrow">Guardar para comparar la próxima vez</div>
   <div class="tl"><label class="f" style="flex:2">Etiqueta (opcional, sin nombres)<input id="evtag" placeholder="p. ej. cama 4" autocomplete="off" maxlength="30"></label><button class="bt sec" data-r="evsave">Guardar evaluación</button></div>
@@ -274,8 +275,8 @@ export const EVR = {
     if (H.length > 60) H.splice(0, H.length - 60);
     save(); ctx.toast('Evaluación guardada en este dispositivo'); render();
   },
-  evcopy() { const t = $('#vout'); if (!t) return; t.select(); try { navigator.clipboard.writeText(t.value); } catch { document.execCommand('copy'); } $('#vm').textContent = ' Copiado.'; },
-  evtxt() { E().txt = evoText(); save(); render(); },
+  evcopy() { const t = $('#vout'); if (!t) return; const txt = t.tagName == 'TEXTAREA' ? (t.select(), t.value) : t.innerText; try { navigator.clipboard.writeText(txt); } catch { if (t.tagName == 'TEXTAREA') document.execCommand('copy'); } $('#vm').textContent = ' Copiado.'; },
+  evtxt() { E().txt = pack(mdToHtml(evoText())); save(); render(); },
   evregen() { E().txt = null; save(); render(); },
   evreset(b) { if (!b.dataset.arm) { b.dataset.arm = 1; b.textContent = '¿Seguro? Tocá otra vez'; return; } const e = E(); S().ev = { v: 2, tid: e.tid, open: 1, step: 0, sex: e.sex }; save(); render(); },
   ex(b) {
@@ -330,3 +331,6 @@ export function evoChange(e) {
   const x = X(), cur = x[d.ef] || {}; setP(cur, d.ep, t.value); if (cur.s == 'ne' && d.ep != 'd' && d.ep != 'ev') delete cur.s; x[d.ef] = cur; E().txt = null; save(); render();
   return true;
 }
+
+// Texto enriquecido del panel final (se llama desde app.js al editar #vout)
+export function richEvo(html) { E().txt = pack(html); save(); }

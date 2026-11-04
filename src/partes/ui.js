@@ -1,6 +1,7 @@
 // Partes quirúrgicos: biblioteca, borradores por secciones, pasos, validación, versiones y templates propios.
 // Borradores y partes (S.pq): solo en el dispositivo. Templates propios (S.pqt) y favoritos (S.pqx): se sincronizan.
 import { esc, today } from '../data.js';
+import { toolbar, toEdit, toView, pack, mdToHtml } from '../rich.js';
 import { ic } from '../icons.js';
 import { SECS, resolve, visible, check, generate, frag, shown, isVariant, buildSteps } from './engine.js';
 import { PBUILTIN } from './lib/index.js';
@@ -123,7 +124,7 @@ function review(P, T) {
   ${c.pend.length ? `<div class="pan warnp"><h3>Pendiente de confirmar (${c.pend.length})</h3><ul>${c.pend.map(m => `<li>${esc(m)}</li>`).join('')}</ul><p class="meta">Completalos o marcá “No aplica”. El parte no se puede finalizar con datos obligatorios sin documentar.</p></div>` : ''}
   ${c.warn.length ? `<div class="pan"><ul class="meta">${c.warn.map(m => `<li>${esc(m)}</li>`).join('')}</ul></div>` : ''}
   <div class="pan"><h3>Parte quirúrgico</h3>${edited ? '<p class="meta">Editaste el texto a mano. Si cambiás datos, tocá “Regenerar con cambios” (la versión actual queda guardada).</p>' : ''}
-  <textarea id="pout" data-ptxt ${edited ? '' : 'readonly'} rows="16">${esc(txt)}</textarea>
+  ${edited ? `${toolbar('_partes')}<div id="pout" class="rte" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Parte quirúrgico" data-rf="_partes">${toEdit(txt)}</div>` : `<textarea id="pout" readonly rows="16">${esc(txt)}</textarea>`}
   <div class="acts"><button class="bt" data-r="pcopy">${ic('copy', 'sm')} Copiar</button>${edited ? `<button class="bt sec" data-r="pregen">Regenerar con cambios</button>` : `<button class="bt sec" data-r="pedit">${ic('edit', 'sm')} Editar texto final</button>`}<span class="meta" id="pm"></span></div>
   ${(P.vers || []).length ? `<details class="g"><summary>Versiones anteriores (${P.vers.length})</summary>${P.vers.slice().reverse().map((v, i) => `<div class="li"><span class="meta" style="flex:1">${fmtAt(v.at)}</span><button class="add" data-r="pver" data-i="${P.vers.length - 1 - i}">Recuperar</button></div>`).join('')}</details>` : ''}
   <div class="acts" style="margin-top:14px"><button class="bt" data-r="pfin" ${ok ? '' : 'disabled'}>${ic('check', 'sm')} Finalizar parte</button></div></div>
@@ -135,7 +136,7 @@ function review(P, T) {
 function finalView(P, T) {
   const logged = P.lg;
   return `<h2 class="lvl-title">${esc((P.x || {}).proc || T.n)}</h2><p class="meta">Finalizado el ${fmtAt(P.fin.at)} · template v${P.tv || 1}. Un parte finalizado no cambia aunque después edites el template.</p>
-  <div class="pan"><textarea id="pout" readonly rows="18">${esc(P.fin.txt)}</textarea><div class="acts"><button class="bt" data-r="pcopy">${ic('copy', 'sm')} Copiar</button><button class="bt sec" data-r="pdup">Duplicar (sin datos clínicos)</button><span class="meta" id="pm"></span></div></div>
+  <div class="pan"><div id="pout" class="rte ro">${toView(P.fin.txt)}</div><div class="acts"><button class="bt" data-r="pcopy">${ic('copy', 'sm')} Copiar</button><button class="bt sec" data-r="pdup">Duplicar (sin datos clínicos)</button><span class="meta" id="pm"></span></div></div>
   <div class="pan"><h3>${logged ? 'Registrado en tus estadísticas' : 'Registrar en tus procedimientos'}</h3>${logged ? '<p class="meta">Ya figura en Estadísticas.</p>' : `<p class="meta">Suma este procedimiento a tu panel de rendimiento (sin datos del paciente).</p><div class="tl"><label class="f">Tu rol<select id="prol"><option>Cirujano</option><option>Ayudante</option><option>Observador</option></select></label><button class="bt" data-r="plog">Registrar</button></div>`}</div>
   <div class="acts"><button class="add dan" data-r="pdel">${ic('trash', 'sm')} Eliminar parte</button></div>`;
 }
@@ -170,8 +171,8 @@ export const PR = {
   pstmv(b) { const P = cur(), i = +b.dataset.i, j = i + +b.dataset.v; if (j < 0 || j >= P.steps.length) return; [P.steps[i], P.steps[j]] = [P.steps[j], P.steps[i]]; touch(P); save(); render(); },
   pstdel(b) { const P = cur(); P.steps.splice(+b.dataset.i, 1); touch(P); save(); render(); },
   pstadd() { const P = cur(); P.steps.push({ t: 'Se realiza ', on: true }); touch(P); save(); render(); setTimeout(() => { const t = document.querySelectorAll('[data-pst]'); const l = t[t.length - 1]; if (l) { l.focus(); l.setSelectionRange(l.value.length, l.value.length); } }, 50); },
-  pcopy() { const t = $('#pout'); t.select(); try { navigator.clipboard.writeText(t.value); } catch { document.execCommand('copy'); } $('#pm').textContent = ' Copiado.'; },
-  pedit() { const P = cur(); P.txt = generate(ptpl(P.tid), P); touch(P); save(); render(); },
+  pcopy() { const t = $('#pout'); if (!t) return; const txt = t.tagName == 'TEXTAREA' ? (t.select(), t.value) : t.innerText; try { navigator.clipboard.writeText(txt); } catch { if (t.tagName == 'TEXTAREA') document.execCommand('copy'); } $('#pm').textContent = ' Copiado.'; },
+  pedit() { const P = cur(); P.txt = pack(mdToHtml(generate(ptpl(P.tid), P))); touch(P); save(); render(); },
   pregen() { const P = cur(); (P.vers ??= []).push({ at: Date.now(), txt: P.txt }); P.txt = null; touch(P); save(); render(); ctx.toast('Versión anterior guardada'); },
   pver(b) { const P = cur(), v = P.vers[+b.dataset.i]; if (P.txt != null) P.vers.push({ at: Date.now(), txt: P.txt }); else P.vers.push({ at: Date.now(), txt: generate(ptpl(P.tid), P) }); P.txt = v.txt; touch(P); save(); render(); },
   pfin() {
@@ -206,6 +207,9 @@ export function partesInput(e) {
   return false;
 }
 export function partesChange(e) { const t = e.target, d = t.dataset; const P = cur(); if (!P) return false; if (d.pf != null) { P.x[d.pf] = t.value; touch(P); save(); return true; } return false; }
+
+// Texto enriquecido del parte final (se llama desde app.js al editar #pout)
+export function richPartes(html) { const P = cur(); if (!P) return; P.txt = pack(html); touch(P); save(); }
 
 /* =========================================================================
    Editor de templates

@@ -75,8 +75,10 @@ export function plain(v) {
 
 /* ---------- barra de herramientas ---------- */
 export const toolbar = k => `<div class="rtb" role="toolbar" aria-label="Formato de texto" data-rtb="${esc(k)}">
+  <button type="button" data-rc="heading" aria-label="Título">H</button>
   <button type="button" data-rc="bold" aria-label="Negrita"><b>B</b></button><button type="button" data-rc="italic" aria-label="Cursiva"><i>I</i></button><button type="button" data-rc="underline" aria-label="Subrayado"><u>U</u></button>
   <button type="button" data-rc="insertUnorderedList" aria-label="Lista con viñetas">• ≡</button><button type="button" data-rc="insertOrderedList" aria-label="Lista numerada">1. ≡</button>
+  <button type="button" data-rc="outdent" aria-label="Reducir sangría">⇤</button><button type="button" data-rc="indent" aria-label="Aumentar sangría">⇥</button>
   <select data-rs="font" aria-label="Fuente">${FONTS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
   <select data-rs="size" aria-label="Tamaño de letra">${SIZES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
   <select data-rs="color" aria-label="Color del texto">${COLORS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
@@ -89,7 +91,9 @@ const restore = ed => { ed.focus(); if (saved && ed.contains(saved.startContaine
 export function exec(ed, cmd, val) {
   restore(ed);
   try { document.execCommand('styleWithCSS', false, true); } catch { /* sin soporte */ }
-  if (cmd == 'font') document.execCommand('fontName', false, val ? FONT_CSS[val] : 'system-ui');
+  if (cmd == 'heading') { const sel = getSelection(); const anchor = sel.anchorNode; const h = anchor && anchor.nodeType && (anchor.nodeType == 3 ? anchor.parentElement : anchor).closest && (anchor.nodeType == 3 ? anchor.parentElement : anchor).closest('h3'); document.execCommand('formatBlock', false, h ? '<p>' : '<h3>'); }
+  else if (cmd == 'indent' || cmd == 'outdent') document.execCommand(cmd, false, null);
+  else if (cmd == 'font') document.execCommand('fontName', false, val ? FONT_CSS[val] : 'system-ui');
   else if (cmd == 'size') {
     if (!val) return false;
     // execCommand solo conoce 7 tamaños: se marca con 7 y se reemplaza por el tamaño elegido

@@ -398,6 +398,17 @@ pre.fx { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surfa
 .rte:focus { border-color: var(--pri); box-shadow: 0 0 0 3px var(--pri-soft); }
 .rte:empty::before { content: attr(data-ph); color: var(--mut); pointer-events: none; }
 .rte ul, .rte ol, .rd ul, .rd ol { margin: 6px 0; padding-left: 22px; } .rte p { margin: 0 0 6px; }
+.rte.ro { border: 0; padding: 0; background: transparent; min-height: 0; }
+.svind { font-size: 12px; color: var(--mut); margin-left: 6px; opacity: 0; transition: opacity .2s; }
+.svind.on { opacity: 1; }
+.imgg { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin: 10px 0; }
+.imgt { margin: 0; border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; background: var(--surface-2); }
+.imgt a { display: block; aspect-ratio: 1; overflow: hidden; }
+.imgt img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.imgt figcaption { font-size: 12px; color: var(--mut); padding: 4px 6px; }
+.imgctl { display: flex; gap: 2px; justify-content: flex-end; padding: 2px; }
+.imgcap { width: 100%; border: 0; border-top: 1px solid var(--line); background: none; font-size: 12.5px; padding: 5px 6px; outline: none; }
+.imgsec { margin-top: 18px; }
 .sech { display: flex; align-items: center; gap: 8px; justify-content: space-between; } .sech h4 { margin: 0; } .sech .ib { color: var(--mut); }
 .rtt { flex: 1; min-width: 0; font-weight: 700; font-size: 15px; padding: 6px 8px; border: 1px dashed var(--line); border-radius: var(--r-sm); background: transparent; color: var(--ink); }
 .boxadd { margin-top: 20px; padding-top: 6px; border-top: 1px dashed var(--line); }
@@ -411,3 +422,15 @@ pre.fx { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surfa
   #nav button span:last-child { font-size: 10.5px; }
 }
 @media (min-width: 900px) { #nav { overflow-y: auto; } }
+
+/* Exportar ficha a PDF: usa el diálogo nativo de impresión del navegador (sin libs nuevas). */
+@media print {
+  #top, #nav, #fab, #toast, #bk, .toc, .fh .acts, .empty, body > :not(#view) { display: none !important; }
+  body { background: #fff; padding: 0; }
+  #view { padding: 0 !important; }
+  .rd { box-shadow: none; border: 0; padding: 0; }
+  .fh .tag { display: none; }
+  .imgctl, .imgcap { display: none !important; }
+  .imgg { grid-template-columns: repeat(2, 1fr); }
+  a[href] { color: inherit; text-decoration: none; }
+}
